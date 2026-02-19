@@ -2,6 +2,10 @@ import React, { useState } from 'react';
 import axios from 'axios';
 
 const VibeCheck = () => {
+  // --- DYNAMIC API CONFIGURATION ---
+  // This looks for the Vercel environment variable first; defaults to localhost
+  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+
   // --- USER STATE ---
   const [users, setUsers] = useState([
     { name: "Manu Sharma", role: "Senior Dev" },
@@ -54,8 +58,8 @@ const VibeCheck = () => {
     }
     setIsLoading(true);
     try {
-      // Ensure this URL matches your backend port (usually 5000 for Flask)
-      await axios.post('http://localhost:5000/api/submit-vibe', {
+      // UPDATED: Now uses the dynamic API_URL variable
+      await axios.post(`${API_URL}/api/submit-vibe`, {
         userName: currentUser.name, 
         role: currentUser.role, 
         mood, 
@@ -69,9 +73,9 @@ const VibeCheck = () => {
         setIsLoading(false);
       }, 800);
     } catch (error) {
-      console.error(error);
+      console.error("Connection Error:", error);
       setIsLoading(false);
-      alert("Failed to sync. Is the backend running?");
+      alert(`Failed to sync. Backend might be down at: ${API_URL}`);
     }
   };
 
@@ -113,21 +117,16 @@ const VibeCheck = () => {
         <div className="w-full md:w-2/5 p-8 md:p-12 flex flex-col relative border-r border-white/5 bg-gradient-to-b from-white/5 via-transparent to-transparent">
           
           {/* --- TOP: IDENTITY CAPSULE (User Switcher) --- */}
-          {/* NOTE: Added z-50 here so the dropdown floats above everything else */}
           <div className="z-50 flex justify-between items-start">
             <div className={`group flex items-center gap-1 p-1 pr-2 rounded-full border transition-all duration-300 ${isAddingUser ? 'bg-slate-900/90 border-indigo-500 ring-2 ring-indigo-500/20' : 'bg-black/30 border-white/10 hover:border-white/20 hover:bg-black/40'}`}>
               
               {!isAddingUser ? (
-                // MODE: SELECT USER
                 <>
-                   {/* Avatar Circle */}
                   <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold text-sm shadow-lg shrink-0">
                     {currentUser.name.charAt(0)}
                   </div>
 
-                  {/* === CUSTOM DROPDOWN START === */}
                   <div className="relative">
-                    {/* Trigger Button */}
                     <button 
                       onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                       className="flex items-center gap-2 px-3 py-1.5 rounded-full hover:bg-white/5 transition-colors outline-none"
@@ -139,13 +138,10 @@ const VibeCheck = () => {
                       <svg className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
                     </button>
 
-                    {/* Dropdown Menu */}
                     {isDropdownOpen && (
                       <>
-                        {/* Invisible Backdrop to close when clicking outside */}
                         <div className="fixed inset-0 z-10 cursor-default" onClick={() => setIsDropdownOpen(false)}></div>
                         
-                        {/* The Menu List */}
                         <div className="absolute top-full left-0 mt-2 w-56 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl z-20 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                            <div className="p-1">
                               {users.map((u) => (
@@ -188,10 +184,8 @@ const VibeCheck = () => {
                       </>
                     )}
                   </div>
-                  {/* === CUSTOM DROPDOWN END === */}
                 </>
               ) : (
-                // MODE: ADD USER
                 <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2 duration-200 pl-1">
                   <div className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-white shadow-lg">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
@@ -245,9 +239,7 @@ const VibeCheck = () => {
             </div>
             
             <div className="relative w-full h-12 flex items-center">
-              {/* Track */}
               <div className="absolute w-full h-3 bg-slate-700/50 rounded-full overflow-hidden border border-white/5 backdrop-blur-sm">
-                {/* Fill */}
                 <div 
                   className={`h-full transition-all duration-500 ease-out relative ${
                     battery < 30 ? 'bg-gradient-to-r from-red-600 to-red-400' : 
@@ -259,14 +251,12 @@ const VibeCheck = () => {
                 </div>
               </div>
 
-              {/* Invisible Range Input for Interaction */}
               <input 
                 type="range" min="0" max="100" value={battery} 
                 onChange={(e) => setBattery(e.target.value)}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
               />
               
-              {/* Thumb (Visual Only) */}
               <div 
                 className="absolute h-6 w-6 bg-white rounded-full shadow-[0_0_15px_rgba(255,255,255,0.5)] border-2 border-slate-900 pointer-events-none transition-all duration-100 z-10"
                 style={{ left: `calc(${battery}% - 12px)` }}
@@ -278,7 +268,6 @@ const VibeCheck = () => {
         {/* === RIGHT PANEL: CONTROLS === */}
         <div className="w-full md:w-3/5 p-8 md:p-12 bg-slate-900/30 flex flex-col gap-10 overflow-y-auto custom-scrollbar">
           
-          {/* 1. MOOD SELECTOR */}
           <div>
             <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 block flex items-center gap-2">
               <span className="w-1 h-1 bg-indigo-500 rounded-full"></span> Select Vibe
@@ -300,7 +289,6 @@ const VibeCheck = () => {
             </div>
           </div>
 
-          {/* 2. PRESSURE DRIVERS */}
           <div>
             <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 block flex items-center gap-2">
               <span className="w-1 h-1 bg-indigo-500 rounded-full"></span> Primary Driver <span className="text-red-400">*</span>
@@ -323,7 +311,6 @@ const VibeCheck = () => {
             </div>
           </div>
 
-          {/* 3. VENT TEXTAREA */}
           <div className="flex-1 min-h-[160px] flex flex-col">
             <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 block flex items-center gap-2">
               <span className="w-1 h-1 bg-indigo-500 rounded-full"></span> Notes <span className="text-slate-600 text-[10px] normal-case ml-1 border border-slate-700 px-1 rounded">AI Sentiment Analysis Active</span>
@@ -336,7 +323,6 @@ const VibeCheck = () => {
             />
           </div>
 
-          {/* 4. SUBMIT BUTTON */}
           <button 
             onClick={handleSubmit}
             disabled={isLoading}
