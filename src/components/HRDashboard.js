@@ -1,0 +1,423 @@
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
+import { 
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, 
+  LineChart, Line, CartesianGrid, PieChart, Pie, Legend, ReferenceLine
+} from 'recharts';
+
+// --- CONFIGURATION ---
+const DRIVER_MAP = {
+  "Deadlines": { icon: "⏰", color: "#ef4444" }, // Red
+  "Workload": { icon: "📚", color: "#f97316" }, // Orange
+  "Management": { icon: "👔", color: "#8b5cf6" }, // Purple
+  "Pay/Comp": { icon: "💰", color: "#eab308" }, // Yellow
+  "Team": { icon: "🗣️", color: "#3b82f6" }, // Blue
+  "Personal": { icon: "🏠", color: "#ec4899" }, // Pink
+  "All Good": { icon: "✅", color: "#10b981" }, // Emerald
+  "Unknown": { icon: "❓", color: "#475569" }   // Slate
+};
+
+const HRDashboard = () => {
+  const [employees, setEmployees] = useState([]);
+  const [deptData, setDeptData] = useState([]);
+  const [driverStats, setDriverStats] = useState([]); 
+  const [selectedEmp, setSelectedEmp] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [showTeamView, setShowTeamView] = useState(false);
+  const [chartTab, setChartTab] = useState('energy'); 
+
+  const refreshData = () => {
+    setLoading(true);
+    axios.get('http://localhost:5000/api/hr-dashboard')
+      .then(res => {
+        const rawEmps = res.data.employees || [];
+        
+        // Sort by Dept then Name
+        const sortedEmps = [...rawEmps].sort((a, b) => 
+          a.dept.localeCompare(b.dept) || a.name.localeCompare(b.name)
+        );
+
+        setEmployees(sortedEmps);
+        setDeptData(res.data.department_data || []);
+
+        // Aggregate Pie Data
+        const statsMap = {};
+        rawEmps.forEach(e => {
+          const driver = e.primary_driver || e.pressure_source || "Unknown"; 
+          if (!statsMap[driver]) statsMap[driver] = 0;
+          statsMap[driver] += 1;
+        });
+
+        const formattedStats = Object.keys(statsMap).map(key => ({
+          name: key,
+          value: statsMap[key],
+          color: DRIVER_MAP[key]?.color || "#94a3b8" 
+        }));
+
+        setDriverStats(formattedStats);
+        setLoading(false);
+
+        if (!selectedEmp && sortedEmps.length > 0) {
+          const highRisk = sortedEmps.find(e => e.risk_status === 'High Risk');
+          setSelectedEmp(highRisk || sortedEmps[0]);
+        }
+      })
+      .catch(err => {
+        console.error("Error fetching HR data:", err);
+        setLoading(false);
+      });
+  };
+
+  useEffect(() => { refreshData(); }, []);
+
+  const handleAction = (action) => {
+    if (!selectedEmp) return;
+    alert(`⚡ Action Triggered: ${action} for ${selectedEmp.name}`);
+  };
+
+  // --- CUSTOM TOOLTIPS ---
+  const CustomBarTooltip = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className="bg-slate-900/95 border border-indigo-500/30 p-4 rounded-xl shadow-2xl backdrop-blur-md min-w-[200px]">
+          <div className="flex justify-between items-start mb-2 border-b border-white/10 pb-2">
+            <div>
+              <p className="text-white font-black text-sm">{data.name}</p>
+              <p className="text-indigo-300 text-[10px] uppercase font-bold tracking-wider">{data.dept}</p>
+            </div>
+            <span className="text-xl">{DRIVER_MAP[data.primary_driver]?.icon}</span>
+          </div>
+          
+          <div className="space-y-1">
+            <div className="flex justify-between text-xs">
+              <span className="text-slate-400">Role:</span>
+              <span className="text-slate-200 font-medium">{data.role}</span>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-slate-400">Driver:</span>
+              <span className="text-slate-200 font-medium">{data.primary_driver}</span>
+            </div>
+            <div className="flex justify-between text-xs mt-2 pt-2 border-t border-white/5">
+              <span className="text-slate-400">Energy:</span>
+              <span className={`font-black font-mono ${data.avg_battery < 30 ? 'text-red-400' : 'text-emerald-400'}`}>
+                {data.avg_battery}%
+              </span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const CustomPieTooltip = ({ active, payload }) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className="bg-slate-900 border border-slate-700 p-3 rounded-xl shadow-2xl z-50">
+          <p className="text-white text-xs font-bold flex items-center gap-2 mb-1">
+            <span className="text-lg">{DRIVER_MAP[data.name]?.icon || '❓'}</span> 
+            {data.name}
+          </p>
+          <div className="flex justify-between items-center gap-4">
+             <span className="text-slate-400 text-xs">Impact</span>
+             <span className="font-mono font-bold text-white text-sm">{data.value} Emps</span>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  return (
+    <div className="h-screen w-full bg-slate-900 text-slate-200 font-sans overflow-hidden relative flex flex-col">
+      
+      {/* Background Ambience */}
+      <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 z-0 pointer-events-none"></div>
+      
+      {/* HEADER */}
+      <header className="relative z-10 px-6 py-4 flex justify-between items-center border-b border-white/5 bg-slate-900/50 backdrop-blur-md">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 bg-gradient-to-tr from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center text-xl shadow-lg shadow-indigo-500/20">🧠</div>
+          <div>
+            <h1 className="text-lg font-black text-white tracking-tight">MOOD<span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-indigo-400">SENSE</span></h1>
+            <p className="text-[10px] font-bold text-indigo-300 uppercase tracking-widest">Admin Command</p>
+          </div>
+        </div>
+        <button onClick={refreshData} className="bg-slate-800 hover:bg-slate-700 text-white p-2 rounded-lg border border-white/10 transition-all hover:scale-105 active:scale-95">↻ Sync</button>
+      </header>
+
+      {/* MAIN GRID */}
+      <div className="relative z-10 flex-1 p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 overflow-hidden">
+        
+        {/* LEFT: ROSTER LIST */}
+        <div className="lg:col-span-4 bg-slate-800/40 backdrop-blur-xl rounded-3xl border border-white/10 overflow-hidden flex flex-col shadow-2xl">
+          <div className="p-4 border-b border-white/5 bg-white/5 flex justify-between items-center">
+             <h3 className="text-xs font-black text-white uppercase tracking-widest">Live Roster</h3>
+             <span className="bg-indigo-500 text-white px-2 py-0.5 rounded text-[10px] font-bold">{employees.length} Active</span>
+          </div>
+          <div className="overflow-y-auto flex-1 p-2 custom-scrollbar space-y-1">
+            {employees.map((emp) => (
+              <div 
+                key={emp.id} 
+                onClick={() => setSelectedEmp(emp)}
+                className={`group cursor-pointer p-3 rounded-xl transition-all duration-200 border border-transparent flex items-center gap-3 ${
+                  selectedEmp?.id === emp.id ? 'bg-indigo-600/20 border-indigo-500/50 shadow-lg' : 'hover:bg-white/5'
+                }`}
+              >
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold ${
+                   selectedEmp?.id === emp.id ? 'bg-indigo-500 text-white' : 'bg-slate-700 text-slate-400'
+                }`}>
+                  {emp.name.charAt(0)}
+                </div>
+                <div className="flex-1 min-w-0">
+                   <div className="flex justify-between items-center">
+                     <span className={`font-bold text-sm ${selectedEmp?.id === emp.id ? 'text-white' : 'text-slate-300'}`}>{emp.name}</span>
+                     <span className="text-xs">{DRIVER_MAP[emp.primary_driver]?.icon}</span>
+                   </div>
+                   <div className="w-full bg-slate-700/50 rounded-full h-1 mt-1.5 overflow-hidden">
+                      <div className={`h-full rounded-full ${emp.avg_battery < 30 ? 'bg-red-500' : (emp.avg_battery > 70 ? 'bg-emerald-400' : 'bg-amber-400')}`} style={{width: `${emp.avg_battery}%`}}></div>
+                   </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* RIGHT: CHARTS & DETAILS */}
+        <div className="lg:col-span-8 flex flex-col gap-6 h-full overflow-hidden">
+          
+          {/* --- TOP CARD: INTELLIGENCE HUB (Tabs) --- */}
+          <div className="h-[320px] bg-slate-800/40 backdrop-blur-xl rounded-3xl border border-white/10 p-5 flex flex-col shadow-xl relative overflow-hidden">
+            
+            {/* Header with Tabs AND Expand Button */}
+            <div className="flex justify-between items-center mb-2 relative z-20">
+              <div>
+                <h3 className="text-lg font-black text-white">Team Pulse</h3>
+                <p className="text-slate-400 text-xs">Global metrics & drivers.</p>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                {/* Tab Switcher */}
+                <div className="bg-slate-900/80 p-1 rounded-lg flex gap-1 border border-white/10">
+                  <button 
+                    onClick={() => setChartTab('energy')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${chartTab === 'energy' ? 'bg-indigo-500 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                  >
+                    ⚡ Energy
+                  </button>
+                  <button 
+                    onClick={() => setChartTab('drivers')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${chartTab === 'drivers' ? 'bg-indigo-500 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                  >
+                    🎯 Drivers
+                  </button>
+                </div>
+
+                {/* --- FIXED EXPAND BUTTON --- */}
+                <button 
+                  onClick={() => setShowTeamView(true)}
+                  className="w-9 h-9 flex items-center justify-center bg-slate-700/50 hover:bg-indigo-500 text-slate-300 hover:text-white rounded-lg border border-white/10 transition-all active:scale-95 shadow-lg"
+                  title="Maximize View"
+                >
+                  <span className="text-xl leading-none font-light">⤢</span>
+                </button>
+              </div>
+            </div>
+
+            {/* CHART AREA */}
+            <div className="flex-1 w-full min-h-0 relative z-10">
+              {chartTab === 'energy' ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={deptData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} opacity={0.5} />
+                    <XAxis 
+                      dataKey="name" 
+                      stroke="#94a3b8" 
+                      tick={{fontSize: 10}} 
+                      axisLine={false} 
+                      tickLine={false}
+                    />
+                    <YAxis hide />
+                    <Tooltip content={<CustomBarTooltip />} cursor={{fill: 'rgba(255,255,255,0.05)'}} />
+                    <Bar dataKey="energy" radius={[4, 4, 4, 4]}>
+                      {deptData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.energy < 40 ? '#f87171' : (entry.energy > 75 ? '#34d399' : '#818cf8')} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={driverStats}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={90}
+                      paddingAngle={5}
+                      dataKey="value"
+                      nameKey="name"
+                      stroke="none"
+                    >
+                      {driverStats.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip content={<CustomPieTooltip />} />
+                    <Legend 
+                      verticalAlign="middle" 
+                      align="right" 
+                      layout="vertical"
+                      iconSize={8}
+                      wrapperStyle={{ fontSize: '12px', fontWeight: 'bold', color: '#cbd5e1' }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </div>
+
+          {/* --- BOTTOM CARD: SELECTED EMPLOYEE --- */}
+          <div className="flex-1 bg-slate-900/40 backdrop-blur-md rounded-3xl border border-dashed border-slate-700/50 relative overflow-hidden">
+            {selectedEmp ? (
+              <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-indigo-950/20 to-slate-900 p-6 flex flex-col">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h2 className="text-3xl font-black text-white">{selectedEmp.name}</h2>
+                    <p className="text-indigo-300 text-xs font-bold">{selectedEmp.role} • {selectedEmp.dept}</p>
+                  </div>
+                  <div className="text-4xl animate-bounce">
+                    {selectedEmp.avg_battery < 40 ? '⛈️' : (selectedEmp.avg_battery > 75 ? '🔥' : '🌤️')}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 flex-1">
+                  {/* Left Col */}
+                  <div className="flex flex-col gap-3">
+                    <div className="bg-white/5 rounded-xl p-3 border border-white/5 flex items-center gap-3">
+                       <div className="w-10 h-10 rounded-full flex items-center justify-center text-xl bg-slate-800 border border-white/10">
+                         {DRIVER_MAP[selectedEmp.primary_driver]?.icon || '❓'}
+                       </div>
+                       <div>
+                         <div className="text-[10px] text-slate-400 uppercase font-bold">Primary Driver</div>
+                         <div className="text-sm font-bold text-white">
+                           {selectedEmp.primary_driver || "Unknown"}
+                         </div>
+                       </div>
+                    </div>
+                    <div className="flex gap-2 mt-auto">
+                      <button onClick={() => handleAction('Kudos')} className="flex-1 bg-white text-indigo-900 py-2 rounded-lg text-xs font-bold hover:bg-indigo-50">👏 Kudos</button>
+                      <button onClick={() => handleAction('Meeting')} className="flex-1 bg-indigo-600 text-white py-2 rounded-lg text-xs font-bold hover:bg-indigo-500">📅 Sync</button>
+                    </div>
+                  </div>
+
+                  {/* Right Col: Sparkline */}
+                  <div className="bg-black/20 rounded-xl p-3 border border-white/5">
+                     <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={selectedEmp.history || []}>
+                           <Line type="monotone" dataKey="battery" stroke="#818cf8" strokeWidth={3} dot={false} />
+                        </LineChart>
+                     </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-full text-slate-500 font-bold">Select an employee...</div>
+            )}
+          </div>
+
+        </div>
+      </div>
+
+      {/* --- MODAL: FULL TEAM VIEW --- */}
+      {showTeamView && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-8">
+           <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-xl" onClick={() => setShowTeamView(false)}></div>
+           <div className="relative bg-slate-900 w-full max-w-6xl h-full rounded-3xl border border-white/10 p-8 flex flex-col shadow-2xl">
+              <button onClick={() => setShowTeamView(false)} className="absolute top-6 right-6 text-white bg-white/10 p-2 rounded-full hover:bg-white/20">✕</button>
+              <h2 className="text-2xl font-black text-white mb-6">Global Driver Analysis</h2>
+              
+              <div className="flex-1 grid grid-cols-2 gap-8 min-h-0">
+                 
+                 {/* COL 1: STRESSOR BREAKDOWN */}
+                 <div className="bg-slate-950/50 rounded-2xl p-6 border border-white/5 flex flex-col">
+                    <h3 className="text-white font-bold mb-4">What's driving the team?</h3>
+                    <div className="flex-1">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={driverStats}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={80}
+                            outerRadius={120}
+                            paddingAngle={5}
+                            dataKey="value"
+                            nameKey="name"
+                          >
+                             {driverStats.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
+                          </Pie>
+                          <Tooltip content={<CustomPieTooltip />} />
+                          <Legend layout="horizontal" verticalAlign="bottom" align="center" wrapperStyle={{paddingTop: '20px'}} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                 </div>
+                 
+                 {/* COL 2: ENHANCED ENERGY CHART */}
+                 <div className="bg-slate-950/50 rounded-2xl p-6 border border-white/5 flex flex-col">
+                    <div className="flex justify-between items-center mb-4">
+                       <h3 className="text-white font-bold">Energy Distribution by Department</h3>
+                       <div className="flex gap-4 text-[10px] font-bold uppercase text-slate-500">
+                          <span className="flex items-center gap-1"><div className="w-2 h-2 bg-red-400 rounded-full"></div>Burnout Risk</span>
+                          <span className="flex items-center gap-1"><div className="w-2 h-2 bg-emerald-400 rounded-full"></div>Optimal</span>
+                       </div>
+                    </div>
+                    
+                    <div className="flex-1">
+                       <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={employees} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+                             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                             
+                             {/* Grouped X-Axis Labeling */}
+                             <XAxis 
+                               dataKey="name" 
+                               stroke="#475569" 
+                               angle={-45} 
+                               textAnchor="end" 
+                               height={80} 
+                               tick={{fontSize: 10}} 
+                               interval={0}
+                             />
+                             <YAxis stroke="#475569" domain={[0, 100]} />
+                             
+                             {/* Reference Lines for Context */}
+                             <ReferenceLine y={30} stroke="#ef4444" strokeDasharray="3 3" label={{ value: 'RISK', position: 'right', fill: '#ef4444', fontSize: 10 }} />
+                             <ReferenceLine y={75} stroke="#10b981" strokeDasharray="3 3" label={{ value: 'GOAL', position: 'right', fill: '#10b981', fontSize: 10 }} />
+
+                             <Tooltip content={<CustomBarTooltip />} cursor={{fill: 'rgba(255,255,255,0.03)'}} />
+                             
+                             <Bar dataKey="avg_battery" radius={[4, 4, 0, 0]}>
+                                {employees.map((entry, index) => (
+                                   <Cell 
+                                     key={`cell-${index}`} 
+                                     fill={entry.avg_battery < 30 ? '#ef4444' : (entry.avg_battery > 70 ? '#10b981' : '#f59e0b')} 
+                                   />
+                                ))}
+                             </Bar>
+                          </BarChart>
+                       </ResponsiveContainer>
+                    </div>
+                 </div>
+              </div>
+           </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default HRDashboard;
