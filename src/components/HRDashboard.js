@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, 
-   CartesianGrid, PieChart, Pie, Legend, ReferenceLine, AreaChart, Area
+  CartesianGrid, PieChart, Pie, Legend, ReferenceLine, AreaChart, Area
 } from 'recharts';
 
 // --- CONFIGURATION ---
@@ -17,7 +17,6 @@ const DRIVER_MAP = {
   "Unknown": { icon: "❓", color: "#475569" }
 };
 
-
 const HRDashboard = () => {
   const [employees, setEmployees] = useState([]);
   const [deptData, setDeptData] = useState([]);
@@ -25,7 +24,7 @@ const HRDashboard = () => {
   const [selectedEmp, setSelectedEmp] = useState(null);
   const [showTeamView, setShowTeamView] = useState(false);
   const [chartTab, setChartTab] = useState('energy'); 
-  const [viewMode, setViewMode] = useState('overview'); // New: 'overview' or 'history'
+  const [viewMode, setViewMode] = useState('overview');
 
   const refreshData = useCallback(() => {
     const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
@@ -55,15 +54,19 @@ const HRDashboard = () => {
 
         setDriverStats(formattedStats);
 
-        if (!selectedEmp && sortedEmps.length > 0) {
-          const highRisk = sortedEmps.find(e => e.risk_status === 'High Risk');
-          setSelectedEmp(highRisk || sortedEmps[0]);
+        // Logic to set initial selection without creating an infinite loop
+        if (sortedEmps.length > 0) {
+          setSelectedEmp(prev => {
+            if (prev) return sortedEmps.find(e => e.id === prev.id) || sortedEmps[0];
+            const highRisk = sortedEmps.find(e => e.risk_status === 'High Risk');
+            return highRisk || sortedEmps[0];
+          });
         }
       })
       .catch(err => {
         console.error("Error fetching HR data:", err);
       });
-  }, [selectedEmp]);
+  }, []); // Removed selectedEmp to prevent dependency loop
 
   useEffect(() => { 
     refreshData(); 
@@ -240,7 +243,6 @@ const HRDashboard = () => {
                 </div>
 
                 {viewMode === 'overview' ? (
-                  // --- OVERVIEW MODE ---
                   <div className="grid grid-cols-2 gap-4 flex-1">
                     <div className="flex flex-col gap-3">
                       <div className="bg-white/5 rounded-2xl p-4 border border-white/5 flex items-center gap-4">
@@ -281,7 +283,6 @@ const HRDashboard = () => {
                     </div>
                   </div>
                 ) : (
-                  // --- HISTORY LIST MODE ---
                   <div className="flex-1 bg-black/30 rounded-2xl border border-white/5 overflow-hidden flex flex-col">
                     <div className="p-3 bg-white/5 border-b border-white/5 flex justify-between text-[10px] font-black text-slate-500 uppercase tracking-widest">
                        <span>Time Log</span>
