@@ -65,7 +65,8 @@ const VibeCheck = () => {
         mood, 
         battery, 
         ventText, 
-        pressureSource
+        pressure_source: pressureSource, // Map your local state to the backend's expected key
+  primary_driver: pressureSource
       });
       
       setTimeout(() => {
